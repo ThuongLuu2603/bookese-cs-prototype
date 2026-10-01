@@ -37,6 +37,18 @@
 .flight-ops-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}.flight-ops-summary>div{padding:16px;border:1px solid #dfe5ec;border-radius:10px;background:#f8fafc}.flight-ops-summary b{color:#184c78}.flight-ops-summary p{margin:8px 0 0;line-height:1.5}.flight-ops-title{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:18px}.flight-ops-title h1{margin:0 0 6px}.flight-ops-layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}.flight-ops-queue{position:sticky;top:76px;min-width:0}.flight-ops-work{min-width:0}.flight-ops-list{display:grid;gap:8px;margin:14px 0}.flight-ops-item{display:block;width:100%;padding:12px;text-align:left;white-space:normal;border:1px solid #dfe5ec;background:#fff;border-radius:8px}.flight-ops-item span,.flight-ops-item small{display:block}.flight-ops-item small{margin-top:7px;color:#687386}.flight-ops-item.active{border-color:#00aeca;background:#eefbfe}.flight-ops-head{display:flex;gap:8px;margin-bottom:14px}.flight-ops-layout .alert{line-height:1.55}@media(max-width:980px){.flight-ops-summary{grid-template-columns:1fr}.flight-ops-layout{grid-template-columns:1fr}.flight-ops-queue{position:static}}
 /* Order operations need the main column, not a nested three-column form. */
 .order-layout.audit-wide{grid-template-columns:minmax(0,1fr)}.order-layout.audit-wide>.order-money{display:none}.audit-wide>.order-panel~*{display:none}.audit-wide .flight-ops-layout{grid-template-columns:260px minmax(0,1fr)}.flight-ops-title h2{margin:0 0 8px}.flight-ops-title p{margin:0;color:#687386}.audit-form{border-top:1px solid #e5e9f0;padding-top:20px;margin-top:20px}.audit-form h3{font-size:16px;margin:0 0 18px}.audit-form .grid{gap:18px}.audit-form input,.audit-form select,.audit-form textarea{max-width:100%;min-width:0}.audit-form .actions{margin-top:20px}.audit-steps{display:flex;list-style:none;padding:0;margin:20px 0;gap:8px;counter-reset:stage}.audit-steps li{flex:1;font-size:12px;background:#f2f4f8;color:#788292;padding:12px 8px;border-radius:6px;counter-increment:stage}.audit-steps li:before{content:counter(stage) '. ';font-weight:bold}.audit-steps li.done{color:#087a8e;background:#eaf9fc}.flight-ops-queue .card{padding:18px}.flight-ops-queue button{max-width:100%;white-space:normal}.order-tabs{overflow-x:auto;flex-wrap:wrap}.order-tabs button{min-height:42px}.audit-form>label{display:block;margin:14px 0}.audit-wide .flight-ops-work .card{padding:24px}@media(max-width:1100px){.audit-wide .flight-ops-layout{grid-template-columns:220px minmax(0,1fr)}.audit-form .grid{grid-template-columns:1fr}}@media(max-width:800px){.audit-wide .flight-ops-layout{grid-template-columns:1fr}.flight-ops-queue{position:static}.flight-ops-list{grid-template-columns:repeat(2,minmax(0,1fr))}.audit-steps{flex-wrap:wrap}.audit-steps li{min-width:100px}.flight-ops-title{flex-wrap:wrap}}
+
+/* Customer flight: concise primary actions, secondary requests disclosed on demand. */
+.customer-compact-controls .customer-main-actions{display:grid;gap:10px;margin:20px 0 16px}
+.customer-compact-controls .customer-main-actions button{width:100%;min-height:46px;margin:0;padding:12px 16px;text-align:left;border:1px solid #dce4ec;border-radius:8px;background:#fff;color:#007bff;font-weight:600;white-space:normal}
+.customer-compact-controls .customer-main-actions button.primary{background:#007bff;color:white;border-color:#007bff}
+.customer-compact-controls details.customer-support-menu{margin:0;border:0;border-top:1px solid #e5e9ef;border-radius:0;padding:0;background:transparent}
+.customer-compact-controls .customer-support-menu summary{padding:15px 0;cursor:pointer;font-size:15px;font-weight:600;color:#495057}
+.customer-compact-controls .customer-support-options{display:grid;gap:4px;padding:0 0 12px}
+.customer-compact-controls .customer-support-menu button{display:block;text-align:left;background:transparent;border:0;padding:10px 0;margin:0;color:#007bff;white-space:normal}
+.customer-invoice-action{border-top:1px solid #e5e9ef;margin-top:14px;padding-top:12px}
+.customer-invoice-action button{background:transparent;color:#007bff;border:0;padding:8px 0}
+.customer-compact-controls button:focus-visible,.customer-compact-controls summary:focus-visible{outline:2px solid #007bff;outline-offset:3px}
 </style><body><div id="demo"></div><div id="app"></div><dialog id="dialog"></dialog><div id="toast" role="status"></div><script>/* Bookese CS — editable, local-only prototype. No backend or payment calls. */
 const screens={S01:'Danh sách đặt phòng',S02:'Chi tiết đặt phòng',S03:'Thanh toán & tra soát',S04:'Reconfirm với khách sạn',S05:'Yêu cầu hỗ trợ',S06:'Phương án thay thế',S07:'Đổi thông tin booking',S08:'Hủy & xin miễn phí',S09:'Hoàn tiền & xu',S10:'Lịch sử xử lý',S11:'Danh sách vé máy bay',S12:'Chi tiết vé & Hồng Ngọc Hà',S13:'Khách hàng • Lịch sử đặt chỗ',S14:'Khách hàng • Chi tiết booking',S15:'Khách hàng • Hủy miễn phí',S16:'Extranet • Xác nhận booking'};
 const money=n=>new Intl.NumberFormat('vi-VN').format(n)+' đ';
@@ -1101,6 +1113,21 @@ submits['j-manual-request']=v=>{const n=journey().manual.length;csOldRequest(v);
 function csTicketChanges(){const data=journey().flight.refundedScopes||[];return data.length?card('Phạm vi vé / dịch vụ đã hoàn',table(['Yêu cầu','Phạm vi đã cập nhật','Tiền được trả'],data.map(x=>[esc(x.request),esc(x.scope),money(x.amount)]))):'';}
 const csOverviewUpdated=flightOverviewV2;flightOverviewV2=()=>csOverviewUpdated()+csTicketChanges();
 const csCustomerUpdated=currentCustomerFlight;currentCustomerFlight=()=>csCustomerUpdated()+csTicketChanges();
+
+/* Customer action hierarchy: retain Bookese layout and reveal secondary tasks on demand. */
+const compactCustomerFlightBase=currentCustomerFlight;
+currentCustomerFlight=()=>{
+ let html=compactCustomerFlightBase();
+ const controls=`<div class="customer-compact-controls">
+ <div class="customer-main-actions">${btn('Xem vé điện tử','j-face','primary')}${btn('Hành lý, chỗ ngồi & dịch vụ','flight-section-services')}${btn('Đổi vé','flight-section-exchange')}</div>
+ <details class="customer-support-menu"><summary>Yêu cầu hỗ trợ</summary><p class="note">Gửi yêu cầu để Bookese kiểm tra và phản hồi.</p><div class="customer-support-options">${btn('Sửa / đổi tên hành khách','live-name-request')}${btn('Yêu cầu hoàn vé','customer-refund-request')}${btn('Bổ sung thẻ thành viên','customer-flight-mileage')}</div></details>
+ <details class="customer-support-menu"><summary>Vé & email</summary>${btn('Gửi lại email vé','customer-resend-demo')}</details>
+ </div>`;
+ html=html.replace('Tất cả các thông tin có đều chính xác?','Quản lý vé').replace('<p>Bạn có thể xem vé, chọn chỗ ngồi, mua thêm dịch vụ hoặc đổi vé ngay trên đơn đặt chỗ.</p>','');
+ html=html.replace(/<div class="customer-flight-action-list">[\s\S]*?<\/div><hr>/,controls+'<hr>');
+ html=html.replace(/(<section class="card"><h2>Thông tin thanh toán<\/h2>[\s\S]*?)(<\/section>)/,'$1<div class="customer-invoice-action">'+btn('Thông tin hóa đơn VAT','customer-flight-invoice')+'</div>$2');
+ return html;
+};
 
 window.addEventListener('hashchange',()=>{render();window.scrollTo(0,0)});actions['flight-service']=()=>document.getElementById('flight-service')?.scrollIntoView({behavior:'smooth',block:'start'});
 render();

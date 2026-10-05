@@ -1179,6 +1179,109 @@ const nameIntakeDetail=flightDetailV2;
 flightDetailV2=customer=>!customer&&flightSection==='name-intake'?card('Tiếp nhận sửa / đổi tên hành khách',`<p>CS gửi Hồng Ngọc Hà kiểm tra và thực hiện. HNH có thể xác nhận miễn phí hoặc báo phí; tên trên vé chỉ cập nhật sau khi HNH hoàn tất.</p>${kv([['PNR',esc(journey().flight.pnr)],['Số vé',esc(journey().flight.ticket)],['Tên hiện tại',esc(journey().flight.name)]])}<form id="cs-name-intake"><div class="grid">${field('Tên đề nghị theo giấy tờ','cni-name','text','','',true)}${textfield('Lý do / nội dung cần sửa','cni-note','',true)}</div><p class="note">Có phí: báo phí hãng / HNH và phí xử lý Bookese → khách đồng ý → thanh toán QR → HNH thực hiện. Miễn phí: khách đồng ý → HNH thực hiện.</p><button class="primary">Tiếp nhận và theo dõi với HNH</button></form>`):nameIntakeDetail(customer);
 submits['cs-name-intake']=v=>{if(!csTicketCan()||!v['cni-name']?.trim()||!v['cni-note']?.trim())return toast('Nhập tên đề nghị và lý do cần sửa.');submits['j-manual-request']({'jm-type':'Sửa tên hành khách','jm-note':'Tên hiện tại: '+journey().flight.name+' · Tên đề nghị: '+v['cni-name'].trim()+' · '+v['cni-note'].trim()});};
 
+/* Hotel operations, owner scope 05/10: self-service name/cancel; other actions are requests. */
+const hotelRequestTypes={
+ name:{label:'Đổi tên người lưu trú',kind:'name'},
+ change:{label:'Đổi ngày / phòng / khách sạn',kind:'change'},
+ extend:{label:'Thêm phòng / gia hạn lưu trú',kind:'change'},
+ special:{label:'Yêu cầu đặc biệt / đến muộn',kind:'special'},
+ invoice:{label:'Thông tin / điều chỉnh hóa đơn',kind:'invoice'},
+ exception:{label:'Xin miễn / giảm phí hủy',kind:'cancel'},
+ refund:{label:'Hoàn một phần / theo dõi tiền hoàn',kind:'refund'},
+ missing:{label:'Khách sạn không tìm thấy booking',kind:'over'},
+ over:{label:'Hết phòng / chuyển khách sạn',kind:'over'},
+ payment:{label:'Đã trừ tiền / booking đang xử lý',kind:'payment'},
+ complaint:{label:'Sai phòng / phụ thu / chất lượng lưu trú',kind:'complaint'},
+ voucher:{label:'Gửi lại xác nhận đặt phòng',kind:'voucher'},
+ advice:{label:'Tư vấn giá / hỗ trợ khác',kind:'advice'}
+};
+function hotelRequests(){return assistStore().requests.filter(r=>r.kind!=='flight'&&[st.activeBooking,journey().hotel.id].includes(r.booking));}
+function hotelRequestLabel(r){return r.hotelType?hotelRequestTypes[r.hotelType]?.label||assistKinds[r.kind]:assistKinds[r.kind];}
+function hotelRequestCreate(v,customer=false){
+ if(customer?!orderCustomer():!allowed(['CS']))return false;
+ const type=Object.keys(hotelRequestTypes).find(k=>hotelRequestTypes[k].label===v['hr-type']),t=hotelRequestTypes[type];
+ if(customer&&type==='name')return toast('Đổi tên tại mục Thông tin lưu trú.');
+ if(!t||!v['hr-note']?.trim()||!v['hr-consent'])return toast('Chọn nội dung hỗ trợ và xác nhận yêu cầu.');
+ if(!customer&&!v['hr-proof']?.trim())return toast('Ghi căn cứ khách liên hệ / đồng ý.');
+ const from=v['hr-from'],to=v['hr-to'],rooms=Number(v['hr-rooms']);
+ if(['change','extend'].includes(type)&&(!from||!to||to<=from||!Number.isInteger(rooms)||rooms<1))return toast('Kiểm tra ngày lưu trú và số phòng mong muốn.');
+ const invoice=type==='invoice'?{name:v['hr-company']?.trim(),tax:v['hr-tax']?.trim(),address:v['hr-address']?.trim(),email:v['hr-email']?.trim()}:null;
+ if(invoice&&(!invoice.name||!invoice.address||!/^\S+@\S+\.\S+$/.test(invoice.email||'')))return toast('Kiểm tra tên, địa chỉ và email hóa đơn.');
+ const a=assistStore(),payload={from,to,rooms,location:v['hr-location']||'',invoice},note=v['hr-note'].trim();
+ if(hotelRequests().some(r=>r.status!=='Đã xong'&&r.hotelType===type&&r.note===note&&JSON.stringify(r.hotelPayload)===JSON.stringify(payload)))return toast('Yêu cầu này đã được tiếp nhận. Xem tiến độ bên dưới.');
+ const r={id:'YC-'+String(a.requests.length+1).padStart(3,'0'),booking:st.activeBooking||journey().hotel.id,kind:t.kind,hotelType:type,hotelPayload:payload,caseCode:'',channel:customer?'Khách gửi trên website':v['hr-channel']||'Điện thoại',caller:'Nguyễn An (tài khoản đặt)',evidence:customer?'Xác nhận trên đơn '+journey().hotel.id:v['hr-proof'].trim(),note,due:assistDate(2),detected:assistDate(),urgent:!customer&&v['hr-urgent']==='Gấp',owner:'CS',status:'Mới tiếp nhận',at:stamp(),events:[],publicUpdates:[]};
+ a.requests.push(r);if(!customer)a.active=r.id;
+ assistEvent(r,customer?'Khách gửi yêu cầu; booking chưa thay đổi':'CS tiếp nhận yêu cầu khách liên hệ');
+ st.customerUpdateVersion=(st.customerUpdateVersion||0)+1;st.customerUpdateLabel='Yêu cầu mới: '+t.label;save();return true;
+}
+function hotelRequestForm(customer){
+ const type=customer&&st.hotelRequestType==='name'?'change':st.hotelRequestType||'change',h=journey().hotel;
+ return `<form id="hotel-request-${customer?'customer':'cs'}"><div class="grid">${select('Nghiệp vụ','hr-type',Object.entries(hotelRequestTypes).filter(([k])=>!customer||k!=='name').map(([,x])=>x.label),hotelRequestTypes[type].label)}${!customer?select('Kênh tiếp nhận','hr-channel',['Điện thoại','Tin nhắn','Email'])+select('Mức độ','hr-urgent',['Thông thường','Gấp']):''}</div>${['change','extend'].includes(type)?`<div class="grid">${field('Nhận phòng mong muốn','hr-from','date',h.from,'',true)}${field('Trả phòng mong muốn','hr-to','date',h.to,'',true)}${field('Số phòng mong muốn','hr-rooms','number',h.rooms||1,'',true)}${field('Khách sạn / hạng phòng mong muốn','hr-location','text','')}</div>`:''}${type==='invoice'?`<p class="note">Hóa đơn xuất trong ngày thanh toán. Yêu cầu trễ hoặc hóa đơn đã xuất được Kế toán kiểm tra.</p><div class="grid">${field('Tên đơn vị / cá nhân','hr-company','text','','',true)}${field('Mã số thuế','hr-tax','text')}${field('Địa chỉ hóa đơn','hr-address','text','','',true)}${field('Email nhận hóa đơn','hr-email','email','','',true)}</div>`:''}${textfield('Nội dung cần hỗ trợ','hr-note','',true)}${!customer?field('Căn cứ yêu cầu của khách','hr-proof','text','','Mã cuộc gọi, tin nhắn hoặc email.',true):''}${tick(customer?'Tôi xác nhận gửi yêu cầu này cho Bookese':'Đã xác minh người yêu cầu và phạm vi hỗ trợ','hr-consent')}<p class="note">Gửi yêu cầu chưa đổi booking, chưa hủy phòng và chưa thu tiền. Bookese sẽ phản hồi phương án và phí nếu có.</p><button class="primary">${customer?'Gửi yêu cầu cho Bookese':'Tiếp nhận & mở xử lý'}</button></form>`;
+}
+function hotelCustomerProgress(){const list=hotelRequests();return card('Yêu cầu của bạn',list.length?list.map(r=>`<article class="hotel-request-progress"><b>${esc(r.id)} · ${esc(hotelRequestLabel(r))}</b><p>${badge(r.status==='Đã xong'?'Đã giải quyết':r.status,'neutral')}</p><p>${esc(r.note)}</p>${r.publicUpdates?.length?r.publicUpdates.map(x=>`<p>${esc(x.text)}</p>`).join(''):'<p class="muted">Bookese đã nhận yêu cầu và sẽ phản hồi trên đơn này.</p>'}</article>`).join(''):'<p>Chưa có yêu cầu hỗ trợ.</p>');}
+function hotelCustomerRequest(){return card('Gửi yêu cầu hỗ trợ',hotelRequestForm(true))+hotelCustomerProgress();}
+const hotelOldS24=views.S24;
+views.S24=()=>st.customerItem==='flight'?hotelOldS24():hotelCustomerRequest();
+const hotelOldNav=orderNavigation;
+orderNavigation=()=>hotelOldNav().replaceAll('>Hỗ trợ khách<','>Yêu cầu & xử lý<').replaceAll('>Đổi đặt phòng<','>Yêu cầu hỗ trợ<');
+const hotelOldDetail=orderHotelDetails;
+orderHotelDetails=()=>{let html=hotelOldDetail();if(orderCustomer())html=html.replaceAll('Đổi phòng / ngày / khách sạn','Yêu cầu đổi phòng / ngày / khách sạn').replaceAll('Cập nhật tên / yêu cầu đặc biệt','Đổi tên người lưu trú');return html;};
+
+function hotelNameApply(v,query=false){
+ if(!orderCustomer()||selfEditBlock())return false;
+ const h=journey().hotel;let c=h.nameCommand;
+ if(query){if(!c||c.status!=='Đang đồng bộ')return false;}else{
+  if(c?.status==='Đang đồng bộ')return toast('Đang đồng bộ tên. Tra cứu kết quả trước khi gửi lại.');
+  const name=v['hn-name']?.trim();if(!name||!v['hn-consent'])return toast('Nhập tên và xác nhận thay đổi.');
+  if(name===ops().guest)return toast('Tên không thay đổi.');
+  c=h.nameCommand={id:'NAME-'+Date.now(),before:ops().guest,name,status:'Đang đồng bộ'};
+ }
+ const result=v['hn-result']||'Thành công';c.status=result==='Thành công'?'Đã đồng bộ':result==='Thất bại'?'Đồng bộ thất bại':'Đang đồng bộ';
+ if(result==='Thành công'){ops().guest=c.name;h.version++;st.customerUpdateVersion=(st.customerUpdateVersion||0)+1;st.customerUpdateLabel='Khách đổi tên người lưu trú';integration('Đổi tên lưu trú',c.name+' · '+c.id,'Đã đồng bộ Extranet / NCC; đã gửi thông báo khách sạn (mô phỏng)');}
+ else integration('Đổi tên lưu trú',c.name+' · '+c.id,c.status+' · giữ tên hiện tại');
+ save();return true;
+}
+function hotelSelfName(){const c=journey().hotel.nameCommand;return card('Đổi tên người lưu trú',`<p>Tên trên đơn: <b>${esc(ops().guest)}</b></p><form id="hotel-name"><div class="grid">${field('Tên người lưu trú mới','hn-name','text',ops().guest,'',true)}</div>${tick('Tôi xác nhận tên người lưu trú mới','hn-consent')}${jMock('hn-result',['Thành công','Đang xử lý','Thất bại'])}<button class="primary" ${selfEditBlock()||c?.status==='Đang đồng bộ'?'disabled':''}>Lưu và cập nhật khách sạn</button></form>${c?`<p>${badge(c.status,c.status==='Đã đồng bộ'?'good':'warn')} · ${esc(c.name)}</p>`:''}${c?.status==='Đang đồng bộ'?`<form id="hotel-name-query">${jMock('hn-result',['Đang xử lý','Thành công','Thất bại'])}<button>Tra cứu kết quả cập nhật</button></form>`:''}<p class="note">Tên chỉ cập nhật khi đồng bộ thành công. Hệ thống gửi thông tin mới đến khách sạn.</p>`);}
+const hotelOldS19=views.S19;
+views.S19=()=>st.customerItem==='flight'?hotelOldS19():hotelSelfName()+card('Các yêu cầu khác',`<p>Đổi ngày, phòng, khách sạn; yêu cầu đặc biệt; hóa đơn hoặc sự cố: gửi yêu cầu để Bookese hỗ trợ.</p>${link('Gửi yêu cầu hỗ trợ →','S24')}`)+hotelCustomerProgress();
+const hotelOldS14=views.S14;
+views.S14=()=>{let html=hotelOldS14();if(st.customerItem!=='flight')html=html.replaceAll('Đổi phòng / ngày / khách sạn','Gửi yêu cầu thay đổi').replaceAll('Đổi phòng, ngày hoặc khách sạn','Gửi yêu cầu hỗ trợ');return html;};
+// Guard legacy/deep links so customers cannot execute the CS hotel exchange workflow.
+const hotelOldChange=jHotelChange;
+jHotelChange=(customer=false,rebook=false)=>customer||orderCustomer()?hotelCustomerRequest():hotelOldChange(false,rebook);
+const hotelOldConfirm=jConfirmHotel;
+jConfirmHotel=(...args)=>orderCustomer()?toast('Gửi yêu cầu để CS kiểm tra và thực hiện thay đổi.'):hotelOldConfirm(...args);
+
+const hotelOldRefundCreate=jRefundCreate;
+jRefundCreate=(v,source,result)=>{const before=journey().refunds.length,ok=hotelOldRefundCreate(v,source,result);if(ok&&journey().refunds.length>before){const r=journey().refunds.at(-1);r.hotelRequestId=assistCurrent()?.id;integration('Hủy phòng',r.id+' · '+r.scope,result==='Đã hủy'||!result?'Đã đồng bộ Extranet / NCC; đã gửi thông báo khách sạn (mô phỏng)':'Chờ kết quả hủy; chưa xác nhận hoàn tất');st.customerUpdateVersion=(st.customerUpdateVersion||0)+1;st.customerUpdateLabel='Hủy phòng · '+r.status;save();}return ok;};
+const hotelOldProcess=jProcessHotel;
+jProcessHotel=(o,...args)=>{const result=hotelOldProcess(o,...args);if(o.status==='Hoàn tất'&&o.hotelRequestId){const r=assistStore().requests.find(x=>x.id===o.hotelRequestId);if(r){r.hotelOrderId=o.id;r.status='Chờ báo khách';r.owner='CS';}}return result;};
+const hotelConfirmLinked=jConfirmHotel;
+jConfirmHotel=(...args)=>{const before=journey().orders.length,ok=hotelConfirmLinked(...args);if(ok&&journey().orders.length>before){const o=journey().orders.at(-1),r=assistCurrent();if(r&&['change','over','complaint'].includes(r.kind)){o.hotelRequestId=r.id;r.hotelOrderId=o.id;save();}}return ok;};
+
+const hotelOldAssistResult=assistResult;
+assistResult=r=>{if(r.hotelOrderId){const o=journey().orders.find(x=>x.id===r.hotelOrderId);return {ok:o?.status==='Hoàn tất',text:o?.status||'Chưa có kết quả'};}if(r.kind==='refund'){const refs=journey().refunds.filter(x=>x.service==='hotel'&&(!r.refundId||x.id===r.refundId));return {ok:refs.length>0&&refs.every(x=>x.moneyDone&&x.coinDone),text:refs.length?refs.map(x=>x.id+' · '+x.status).join('; '):'Chưa có khoản hoàn; kiểm tra phạm vi và điều kiện trước khi lập hoàn'};}if(r.kind==='change')return {ok:false,text:'Chưa có phương án đổi được liên kết với yêu cầu này'};return hotelOldAssistResult(r);};
+const hotelOldEdit=assistEditForm;
+assistEditForm=r=>{let html=hotelOldEdit(r);if(r.hotelPayload?.invoice&&!r.draft){const i=r.hotelPayload.invoice;html=html.replace('value="'+esc(ops().invoice?.name||'')+'"', 'value="'+esc(i.name)+'"');}return html;};
+const hotelOldRoute=assistRoutePanel;
+assistRoutePanel=r=>{let html=hotelOldRoute(r);if(r.kind==='change')html=`<p>PS/khách sạn xác nhận chỗ và điều kiện. CS báo khách, giữ chỗ mới, thu chênh lệch qua QR rồi hủy miễn phí đơn cũ và xuất đơn mới.</p>${r.hotelPayload?kv([['Khách muốn',esc(r.hotelPayload.location||'Giữ khách sạn hiện tại')],['Ngày / số phòng',esc(r.hotelPayload.from||'')+' → '+esc(r.hotelPayload.to||'')+' · '+(r.hotelPayload.rooms||'—')+' phòng']]):''}${link('Kiểm tra phòng và tạo phương án →','S07')}<p>Kết quả: ${esc(assistResult(r).text)}</p>`;if(r.kind==='refund')html=html.replace('S09','S09')+link('Kiểm tra khoản hoàn trên đơn →','S09');return html;};
+const hotelOldGuide=assistGuide;
+assistGuide=r=>hotelOldGuide(r).replace('reconfirm tùy chọn, xu theo dịch vụ hoàn, vé làm Hồng Ngọc Hà','reconfirm tùy chọn; không hoàn voucher/xu đã dùng, hủy hoặc thu hồi toàn bộ xu thưởng khi xác nhận hoàn/hủy');
+function hotelOpsCenter(){const a=assistStore();let r=assistCurrent();if(r?.kind==='flight')r=null;const list=hotelRequests();return `<div class="flight-ops-title"><div><h2>Yêu cầu & xử lý trên đơn phòng</h2><p>CS tiếp nhận và trao đổi với khách; PS phối hợp khách sạn khi cần.</p></div>${btn('＋ Tiếp nhận yêu cầu','assist-new','primary')}</div><div class="flight-ops-layout"><div class="flight-ops-queue">${card('Yêu cầu trên đơn',list.length?list.map(x=>`<button class="assist-request ${x.id===r?.id?'active':''}" data-assist-id="${esc(x.id)}"><b>${esc(x.id)} · ${esc(hotelRequestLabel(x))}</b><span>${esc(x.status)}</span><small>${esc(x.channel)} · ${esc(x.owner)}</small></button>`).join(''):'<p>Chưa có yêu cầu. Khách gửi trên website hoặc CS tiếp nhận tại đây.</p>')}</div><div class="flight-ops-work">${!r?card('Tiếp nhận yêu cầu',hotelRequestForm(false)):card(hotelRequestLabel(r),`${badge(r.status,'neutral')}<p>${esc(r.note)}</p><ol class="audit-steps"><li class="done">Tiếp nhận</li><li>Kiểm tra / phương án</li><li>Thực hiện</li><li class="${r.status==='Đã xong'?'done':''}">Báo khách</li></ol>${r.status==='Đã xong'?`<p>${esc(r.resolution||'Đã xử lý')}</p>`:assistRoutePanel(r)}${r.hotelPayload?.invoice?`<details><summary>Thông tin hóa đơn khách gửi</summary>${kv(Object.entries(r.hotelPayload.invoice).map(([k,v])=>[({name:'Tên',tax:'Mã số thuế',address:'Địa chỉ',email:'Email'})[k],esc(v||'—')]))}</details>`:''}`)+(r.status==='Đã xong'?'':card('Phối hợp và phản hồi',assistCoordination(r))+card('Cập nhật cho khách',assistFinish(r)))}</div></div>`;}
+views.S22=hotelOpsCenter;screens.S22='CS • Yêu cầu & xử lý đặt phòng';
+const hotelOldCoordination=assistCoordination;
+assistCoordination=r=>hotelOldCoordination(r).replace('<option >Hồng Ngọc Hà</option>','');
+const hotelOldOverview=views.S02;
+views.S02=()=>card('Yêu cầu trên đơn',`<p>${hotelRequests().filter(r=>r.status!=='Đã xong').length} yêu cầu đang mở</p>${link('Tiếp nhận / xử lý yêu cầu →','S22')}`)+hotelOldOverview();
+const hotelOldWork=bookingWork;
+bookingWork=s=>{const out=hotelOldWork(s);for(const r of s.journey?.refunds||[])if(r.service==='hotel'&&!r.moneyDone)out.push({group:'Hoàn',label:r.id+' · '+r.status,to:'S09'});return out;};
+submits['hotel-request-customer']=v=>{if(hotelRequestCreate(v,true)){render();toast('Đã gửi yêu cầu. Booking hiện tại chưa thay đổi.');}};
+submits['hotel-request-cs']=v=>{if(hotelRequestCreate(v,false))render();};
+submits['hotel-name']=v=>{hotelNameApply(v);render();};
+submits['hotel-name-query']=v=>{hotelNameApply(v,true);render();};
+const hotelOldBind=bindOps;
+bindOps=()=>{hotelOldBind();const picker=document.querySelector('#hr-type');if(picker)picker.addEventListener('change',()=>{st.hotelRequestType=Object.keys(hotelRequestTypes).find(k=>hotelRequestTypes[k].label===picker.value);save();render();});};
+
 window.addEventListener('hashchange',()=>{render();window.scrollTo(0,0)});actions['flight-service']=()=>document.getElementById('flight-service')?.scrollIntoView({behavior:'smooth',block:'start'});
 render();
 </script></body></html>

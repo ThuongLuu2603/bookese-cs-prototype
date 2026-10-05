@@ -1308,9 +1308,10 @@ orderWorkspace=()=>{let html=csFocusWorkspaceBase();if(csHotelTool&&!orderFlight
 
 // Show only the coordination action currently needed, keeping other actions available.
 const csCoordinationBase=assistCoordination;
-assistCoordination=r=>{const html=csCoordinationBase(r),split=html.indexOf('<form id="assist-response">');if(split<0)return html;const handoff=html.slice(0,split),response=html.slice(split);return r.team&&!r.response?response+csFold('Modifier la coordination'.replace('Modifier la coordination','Đổi đầu mối / cập nhật nội dung phối hợp'),handoff):handoff+csFold('Đã có phản hồi · ghi nhận ngay',response);};
+assistCoordination=r=>{const html=csCoordinationBase(r),split=html.indexOf('<form id="assist-response">');if(split<0)return html;const handoff=html.slice(0,split),response=html.slice(split);return r.team&&!r.response?response+csFold('Đổi đầu mối / cập nhật nội dung phối hợp',handoff):handoff+csFold('Đã có phản hồi · ghi nhận ngay',response);};
 const csFormBase=hotelRequestForm;
 hotelRequestForm=customer=>{let html=csFormBase(customer);if(customer)return html;return html.replace('<p class="note">Gửi yêu cầu chưa đổi booking, chưa hủy phòng và chưa thu tiền. Bookese sẽ phản hồi phương án và phí nếu có.</p>','');};
+flightOpsIntake=()=>{const f=journey().flight;return card('Khách cần hỗ trợ gì?',`<form id="flight-ops-intake">${select('Nghiệp vụ','fo-type',[...Object.values(flightOpsCatalog).map(x=>x.label),'Sửa / đổi tên hành khách'])}${textfield('Nội dung khách cần hỗ trợ','fo-note','',true)}<p class="cs-context">${esc(f.name)} · ${esc(f.ticket)} · PNR ${esc(f.pnr)}</p><details class="cs-context"><summary>Chỉnh phạm vi hành khách / chặng và hạn phản hồi</summary><div class="grid">${field('Hành khách / số vé / chặng cần xử lý','fo-scope','text',f.name+' · '+f.ticket+' · SGN → HAN','',true)}${field('Tham chiếu PNR / giao dịch','fo-proof','text',f.pnr,'',true)}${field('Hạn phản hồi (giờ Việt Nam)','fo-due','datetime-local',auditLocalTime(),'',true)}</div></details>${tick('Đã xác minh người yêu cầu và phạm vi xử lý','fo-consent')}<button class="primary">Tiếp nhận & xử lý</button></form>`);};
 
 window.addEventListener('hashchange',()=>{render();window.scrollTo(0,0)});actions['flight-service']=()=>document.getElementById('flight-service')?.scrollIntoView({behavior:'smooth',block:'start'});
 render();

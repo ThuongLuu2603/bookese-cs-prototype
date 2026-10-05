@@ -1363,12 +1363,12 @@ assistResult=r=>{if(r.kind==='special')return {ok:!!r.response&&r.command?.state
 actions['desk-customer-view']=()=>{st.customerItem=orderFlight()?'flight':'hotel';go('S14');};
 // Select an existing refund explicitly; a new request must not inherit an unrelated result.
 const deskRouteBeforeRefundLink=assistRoutePanel;
-assistRoutePanel=r=>{let html=deskRouteBeforeRefundLink(r);if(r.kind==='refund'&&!r.refundId){const rows=journey().refunds.filter(x=>x.service==='hotel');if(rows.length)html=`<form data-form="desk-link-refund"><label>Khoản hoàn cần theo dõi<select name="refundId">${rows.map(x=>`<option value="${esc(x.id)}">${esc(x.id)} · ${money(x.amount)} · ${esc(x.status)}</option>`).join('')}</select></label><button class="primary" type="submit">Theo dõi khoản hoàn này</button></form>`+html;}return html;};
+assistRoutePanel=r=>{let html=deskRouteBeforeRefundLink(r);if(r.kind==='refund'&&!r.refundId){const rows=journey().refunds.filter(x=>x.service==='hotel');if(rows.length)html=`<form id="desk-link-refund"><label>Khoản hoàn cần theo dõi<select name="refundId">${rows.map(x=>`<option value="${esc(x.id)}">${esc(x.id)} · ${money(x.amount)} · ${esc(x.status)}</option>`).join('')}</select></label><button class="primary" type="submit">Theo dõi khoản hoàn này</button></form>`+html;}return html;};
 submits['desk-link-refund']=data=>{const r=assistCurrent(),rf=journey().refunds.find(x=>x.service==='hotel'&&x.id===data.refundId);if(!r||r.kind!=='refund'||!rf)return false;r.refundId=rf.id;save();render();return true;};
 const deskSelectTabBase=deskGoTab;
 deskGoTab=tab=>{if(tab==='work'){const pending=deskRequests().find(x=>!x.done);if(pending&&orderFlight()&&!Number.isInteger(st.csManualIndex)&&!Number.isInteger(st.flightOpsSelected)){if(pending.key.startsWith('M'))st.csManualIndex=Number(pending.key.slice(1));else st.flightOpsSelected=Number(pending.key.slice(1));}else if(pending&&!orderFlight()&&!assistCurrent())assistStore().active=pending.r.id;}deskSelectTabBase(tab);};
 const deskRefundPanelBase=csRefundPanel;
-csRefundPanel=(r,ref,customer=false)=>{let html=deskRefundPanelBase(r,ref,customer);if(!customer&&csRefundState(r).quote)html=html.replace(/<form\b[^>]*data-form="cs-quote-[^"]*"[\s\S]*?<\/form>/,form=>deskFold('Kiểm tra lại điều kiện / phạm vi hoàn',form));return html;};
+csRefundPanel=(r,ref,customer=false)=>{let html=deskRefundPanelBase(r,ref,customer);if(!customer&&csRefundState(r).quote)html=html.replace(/<form\b[^>]*id="cs-quote-[^"]*"[\s\S]*?<\/form>/,form=>deskFold('Kiểm tra lại điều kiện / phạm vi hoàn',form));return html;};
 
 window.addEventListener('hashchange',()=>{render();window.scrollTo(0,0)});actions['flight-service']=()=>document.getElementById('flight-service')?.scrollIntoView({behavior:'smooth',block:'start'});
 render();

@@ -1806,4 +1806,23 @@ const transferQueue=workQueue;workQueue=function(o){if(o.transferCompleted&&!ope
 const transferSummary=workSummary;workSummary=function(o){if(o.transferCompleted&&!openRequests(o).length)return '<b>Đã hoàn tất chuyển booking</b><small>'+esc(o.replacedFrom?'Nhận từ '+o.replacedFrom:o.transferredTo?'Chuyển sang '+o.transferredTo:'Đã hoàn tất')+'</small>';return transferSummary(o);};
 for(const o of state.orders)for(const r of o.requests||[])completeTransferPair(o,r);
 save();render();
+
+// CS finishes at refund submission; approval and payout belong to Finance.
+function csRefundAction(o){return (o.refunds||[]).some(f=>['draft','rejected','returned'].includes(f.status));}
+const refundHandoffQueue=workQueue,refundHandoffSummary=workSummary;
+workQueue=function(o){
+ if(openRequests(o).length||o.booking==='Đang xử lý')return refundHandoffQueue(o);
+ if(csRefundAction(o))return o.assignee?'working':'todo';
+ if(o.refunds?.length)return 'completed';
+ return refundHandoffQueue(o);
+};
+workSummary=function(o){
+ if(openRequests(o).length||o.booking==='Đang xử lý')return refundHandoffSummary(o);
+ if(csRefundAction(o))return '<b>Hoàn thiện đề xuất hoàn</b><small>CS bổ sung hồ sơ / xử lý phản hồi</small>';
+ if(o.refunds?.length)return '<b>CS đã hoàn tất đề xuất hoàn</b><small>Duyệt và chi hoàn tại Quản lý thanh toán</small>';
+ return refundHandoffSummary(o);
+};
+function refundHandoffSamples(s){if(s.refundHandoffVersion)return s;const o=s.orders.find(o=>o.id==='BK-2508');for(const f of o?.refunds||[])if(f.status==='draft'&&f.reason==='Khoản hoàn từ dữ liệu mẫu'){Object.assign(f,{status:'submitted',basis:'KS xác nhận hủy miễn phí (dữ liệu mẫu)',submittedAt:stamp()});o.caseOpen=false;}s.refundHandoffVersion=1;return s;}
+const refundHandoffSeed=seed;seed=()=>refundHandoffSamples(refundHandoffSeed());refundHandoffSamples(state);
+save();render();
 </script></body></html>

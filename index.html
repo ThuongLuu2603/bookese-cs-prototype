@@ -1700,10 +1700,16 @@ render=function(){listRenderBase();for(const [id,key]of [['stay-from','stayFrom'
 save();render();
 
 function listMoneyBreakdown(o){
- const supplement=bookingSupplementValue(o);let h='<small>'+(supplement?'Giá trị gồm dịch vụ bổ sung':'Giá trị booking hiện tại')+'</small><strong class="money">'+money(numeric(o.gross)+supplement)+'</strong><small>Khách đã thanh toán: '+money(numeric(o.paid)+numeric(o.extraPaid))+'</small>';
- if(o.replacedFrom){const source=state.orders.find(x=>x.id===o.replacedFrom),transfer=(source?.requests||[]).find(r=>r.linkedId===o.id)?.proposal?.transfer??(source?.requests||[]).find(r=>r.linkedId===o.id)?.plan?.transfer;h+='<small>Đã nhận từ booking '+esc(o.replacedFrom)+(transfer!=null?': '+money(transfer):' · xem giao dịch trên đơn')+'</small>';}
- if(o.voucher)h+='<small>Voucher đã dùng: '+money(o.voucher)+'</small>';
- if(o.coins)h+='<small>Xu đã dùng: '+money(o.coins)+'</small>';
+ const supplement=bookingSupplementValue(o),cancelled=bookingStatus(o)==='Hủy',net=Math.max(0,numeric(o.gross)-numeric(o.voucher)-numeric(o.coins))+supplement;
+ const supplementReceived=(o.requests||[]).filter(r=>['surcharge','services'].includes(r.kind)).reduce((sum,r)=>sum+numeric(r.collectedAmount??r.receipt?.amount??(r.paid?(r.proposal?.charge??r.plan?.charge??r.quote?.total):0)),0);
+ let h='<small>Giá trị booking'+(cancelled?' trước hủy':'')+' (sau xu/voucher)</small><strong class="money">'+money(net)+'</strong>';
+ if(o.voucher||o.coins)h+='<details><summary>Xu / voucher đã dùng</summary>'+(o.voucher?'<small>Voucher đã dùng: '+money(o.voucher)+'</small>':'')+(o.coins?'<small>Xu đã dùng: '+money(o.coins)+'</small>':'')+'</details>';
+ h+='<small>Khách đã thanh toán: '+money(numeric(o.paid)+supplementReceived)+'</small>';
+ if(o.replacedFrom){const source=state.orders.find(x=>x.id===o.replacedFrom),r=(source?.requests||[]).find(r=>r.linkedId===o.id),transfer=r?.proposal?.transfer??r?.plan?.transfer;h+='<small>Trong đó, nhận từ booking '+esc(o.replacedFrom)+(transfer!=null?': '+money(transfer):' · xem giao dịch trên đơn')+'</small>';}
+ if(o.transferredTo&&o.transferAmount)h+='<small>Đã chuyển sang '+esc(o.transferredTo)+': '+money(o.transferAmount)+'</small>';
+ if(cancelled)h+='<small>Phí hủy giữ lại: '+money(o.retainedFees||0)+'</small>';
+ const due=(o.requests||[]).filter(r=>r.stage==='payment'&&!r.paid&&['surcharge','services'].includes(r.kind)).reduce((sum,r)=>sum+Math.max(0,numeric(r.proposal?.charge??r.plan?.charge??r.quote?.total)-numeric(r.collectedAmount)),0);
+ if(due)h+='<span class="balance-label due">Còn thu thêm: '+money(due)+'</span>';
  return h;
 }
 function redSupplementDue(o){return (o.requests||[]).some(r=>r.stage==='payment'&&!r.paid&&['surcharge','services'].includes(r.kind)&&(numeric(r.proposal?.charge??r.plan?.charge??r.quote?.total)-numeric(r.collectedAmount))>0);}
